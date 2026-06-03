@@ -456,7 +456,4 @@ The application usually runs on:
 
 ```bash
 http://localhost:3001
-```
 
-</div>
-```
