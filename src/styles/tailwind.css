@@ -1,0 +1,203 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@layer base {
+  :root,
+  html.dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 5.5%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 5.5%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 190 95% 70%;
+    --primary-foreground: 240 10% 3.9%;
+    --secondary: 240 4% 16%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 55%;
+    --accent: 263 70% 74%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 4% 14%;
+    --input: 240 4% 14%;
+    --ring: 190 95% 70%;
+    --positive: 142 71% 45%;
+    --warning: 38 92% 50%;
+    --negative: 0 72% 51%;
+  }
+
+  html.light {
+    --background: 0 0% 98%;
+    --foreground: 240 10% 8%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 8%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 8%;
+    --primary: 190 95% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 6% 94%;
+    --secondary-foreground: 240 10% 8%;
+    --muted: 240 6% 94%;
+    --muted-foreground: 240 4% 42%;
+    --accent: 263 62% 54%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 86%;
+    --input: 240 6% 86%;
+    --ring: 190 95% 38%;
+    --positive: 142 71% 36%;
+    --warning: 38 92% 44%;
+    --negative: 0 72% 46%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'DM Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+@layer utilities {
+  .text-primary { color: hsl(var(--primary)); }
+  .text-accent { color: hsl(var(--accent)); }
+  .text-muted-foreground { color: hsl(var(--muted-foreground)); }
+  .bg-card { background-color: hsl(var(--card)); }
+  .bg-muted { background-color: hsl(var(--muted)); }
+  .border-border { border-color: hsl(var(--border)); }
+  .ring-primary { --tw-ring-color: hsl(var(--primary)); }
+
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background-color: hsl(var(--border)); border-radius: 2px; }
+
+  .glow-cyan {
+    box-shadow: 0 0 20px -5px hsl(190 95% 70% / 0.3);
+  }
+  .glow-violet {
+    box-shadow: 0 0 20px -5px hsl(263 70% 74% / 0.25);
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out forwards;
+  }
+  .animate-slide-up {
+    animation: slideUp 0.25s ease-out forwards;
+  }
+  .animate-pulse-highlight {
+    animation: pulseHighlight 1s ease-out forwards;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulseHighlight {
+    0% { background-color: hsl(190 95% 70% / 0.15); }
+    100% { background-color: transparent; }
+  }
+
+  html.light .bg-black,
+  html.light .bg-neutral-950,
+  html.light .bg-zinc-950 {
+    background-color: hsl(var(--background)) !important;
+  }
+
+  html.light .bg-neutral-900,
+  html.light .bg-zinc-900 {
+    background-color: hsl(var(--card)) !important;
+  }
+
+  html.light .bg-neutral-800,
+  html.light .bg-zinc-800,
+  html.light .bg-gray-800 {
+    background-color: hsl(var(--muted)) !important;
+  }
+
+  html.light .bg-neutral-700,
+  html.light .bg-zinc-700 {
+    background-color: hsl(240 6% 88%) !important;
+  }
+
+  html.light .bg-black\/40,
+  html.light .bg-neutral-950\/40,
+  html.light .bg-neutral-950\/45,
+  html.light .bg-neutral-950\/60,
+  html.light .bg-neutral-950\/95,
+  html.light .bg-neutral-900\/40,
+  html.light .bg-neutral-800\/50,
+  html.light .bg-white\/5,
+  html.light .bg-white\/10 {
+    background-color: hsl(var(--card) / 0.88) !important;
+  }
+
+  html.light .border-neutral-900,
+  html.light .border-neutral-800,
+  html.light .border-neutral-700,
+  html.light .border-zinc-900,
+  html.light .border-zinc-800,
+  html.light .border-white\/10 {
+    border-color: hsl(var(--border)) !important;
+  }
+
+  html.light .text-white,
+  html.light .text-gray-100,
+  html.light .text-gray-200,
+  html.light .text-gray-300 {
+    color: hsl(var(--foreground)) !important;
+  }
+
+  html.light .text-gray-400,
+  html.light .text-gray-500,
+  html.light .text-neutral-400,
+  html.light .text-zinc-400 {
+    color: hsl(var(--muted-foreground)) !important;
+  }
+
+  html.light .hover\:bg-neutral-900\/40:hover,
+  html.light .hover\:bg-neutral-800:hover,
+  html.light .hover\:bg-white\/10:hover {
+    background-color: hsl(var(--muted)) !important;
+  }
+
+  html.light .bg-blue-600,
+  html.light .bg-red-600,
+  html.light .bg-green-600,
+  html.light .bg-yellow-600,
+  html.light .bg-cyan-500,
+  html.light .bg-gradient-to-r {
+    color: white !important;
+  }
+
+  html.light .shadow-2xl,
+  html.light .shadow-xl,
+  html.light .shadow-lg {
+    box-shadow: 0 18px 45px -24px hsl(240 10% 8% / 0.28) !important;
+  }
+}
