@@ -4,6 +4,7 @@
 # 🧠⚛️ NeuroSpace Admin
 
 ### Modern Administration Dashboard for the NeuroSpace Platform
+https://neurospace-admin.vercel.app/login-screen
 
 **NeuroSpace Admin** is a secure and modern administration dashboard designed to manage, monitor and analyze the activity of the NeuroSpace platform.
 
