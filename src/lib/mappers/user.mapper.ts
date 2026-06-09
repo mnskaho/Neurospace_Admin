@@ -1,5 +1,5 @@
 import type { Profile, Payment, Training, PlanType } from '@/lib/types';
-import { normalizePlan } from '@/lib/data';
+import { normalizePlan } from '@/lib/utils/plan';
 
 export type UserRow = {
   id: string;

@@ -140,7 +140,7 @@ export default function AnalyticsPage() {
 
         <MetricCard
           title="Revenue"
-          value={`$${analytics?.revenueByDay.reduce((a, b) => a + b, 0) || 0}`}
+          value={`${analytics?.revenueByDay.reduce((a, b) => a + b, 0) || 0}€`}
           icon={DollarSign}
           color="text-green-400"
         />

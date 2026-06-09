@@ -29,7 +29,7 @@ import { toast } from 'sonner';
 export type DashboardMetrics = {
   totalUsers: number;
   activeUsers7d: number;
-  premiumSubscribers: number;
+  paidSubscribers: number;
   totalRevenue: number;
   monthlyGrowth: number;
   uniqueDatasets: number;
@@ -65,7 +65,7 @@ export default function DashboardContent() {
       setMetrics({
         totalUsers: data.totalUsers,
         activeUsers7d: data.activeUsers7d,
-        premiumSubscribers: data.premiumSubscribers,
+        paidSubscribers: data.paidSubscribers,
         totalRevenue: data.totalRevenue,
         monthlyGrowth: data.monthlyGrowth,
         uniqueDatasets: data.uniqueDatasets,

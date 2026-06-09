@@ -6,14 +6,14 @@ interface PlanDistributionChartProps {
   data: { plan: string; count: number }[];
 }
 
-const COLORS = ['hsl(240 5% 40%)', 'hsl(263 70% 74%)'];
+const COLORS = ['hsl(240 5% 40%)', 'hsl(263 70% 74%)', 'hsl(190 95% 70%)'];
 
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: { name: string; value: number }[] }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-[hsl(240_10%_7%)] border border-[hsl(var(--border))] rounded-lg px-3.5 py-2.5 shadow-xl">
       <p className="text-[12px] font-semibold text-[hsl(var(--foreground))]">{payload[0].name}</p>
-      <p className="text-[14px] font-bold tabular-nums" style={{ color: payload[0].name === 'Premium' ? 'hsl(263 70% 74%)' : 'hsl(240 5% 70%)' }}>
+      <p className="text-[14px] font-bold tabular-nums" style={{ color: payload[0].name === 'Free' ? 'hsl(240 5% 70%)' : 'hsl(263 70% 74%)' }}>
         {payload[0].value} users
       </p>
     </div>

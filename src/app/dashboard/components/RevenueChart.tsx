@@ -21,7 +21,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
     <div className="bg-[hsl(240_10%_7%)] border border-[hsl(var(--border))] rounded-lg px-3.5 py-2.5 shadow-xl">
       <p className="text-[11px] font-medium text-[hsl(var(--muted-foreground))] mb-1">{label}</p>
       <p className="text-[15px] font-bold text-[hsl(var(--primary))] tabular-nums">
-        ${payload[0].value.toLocaleString()}
+        {payload[0].value.toLocaleString()}€
       </p>
     </div>
   );
@@ -58,7 +58,7 @@ export default function RevenueChart({ data }: RevenueChartProps) {
           tick={{ fill: 'hsl(240 5% 55%)', fontSize: 11 }}
           axisLine={false}
           tickLine={false}
-          tickFormatter={(v) => `$${v}`}
+          tickFormatter={(v) => `${v}€`}
           width={48}
         />
         <Tooltip content={<CustomTooltip />} />

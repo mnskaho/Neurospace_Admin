@@ -1,33 +1,6 @@
-// export type PlanType = 'Free' | 'Pro' | 'Entreprise';
-
-// /* ================= PROFILE ================= */
-// export type Profile = {
-//   id: string;
-//   name: string | null;
-//   email: string | null;
-//   institution: string | null;
-//   created_at: string;
-//   updated_at: string | null;
-// };
-// /* ================= PAYMENT ================= */
-// export type Payment = {
-//   id: string;
-//   user_id: string;
-//   plan: string; // brut DB (on normalise après)
-//   amount?: number;
-//   created_at: string;
-// };
-
-// /* ================= TRAINING ================= */
-// export type Training = {
-//   id: string;
-//   user_id: string;
-//   dataset_name?: string;
-//   created_at: string;
-// };
-
-
-export type PlanType = 'Free' | 'Pro' | 'Entreprise';
+export type PlanType = 'Free' | 'Pro' | 'Pro+';
+export type PlanKey = 'free' | 'pro' | 'pro_plus';
+export type DbPlanType = PlanType | PlanKey | (string & {});
 
 /* ================= PROFILE ================= */
 export type Profile = {
@@ -50,7 +23,7 @@ export type Payment = {
   currency: string;
   payment_method: string | null;
   invoice_number: string | null;
-  plan: 'Free' | 'Pro' | 'Entreprise' | 'Premium'; // compat DB
+  plan: DbPlanType; // compat DB: legacy plan values normalize before display
   created_at: string;
 };
 

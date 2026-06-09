@@ -19,8 +19,8 @@ interface MetricsBentoGridProps {
 }
 
 function formatCurrency(value: number) {
-  if (value >= 1000) return `$${(value / 1000).toFixed(1)}k`;
-  return `$${value.toFixed(0)}`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k€`;
+  return `${value.toFixed(0)}€`;
 }
 
 function formatGrowth(value: number) {
@@ -53,8 +53,8 @@ export default function MetricsBentoGrid({ metrics }: MetricsBentoGridProps) {
     },
     {
       id: 'premium-subs',
-      label: 'Premium Subscribers',
-      value: metrics.premiumSubscribers.toLocaleString(),
+      label: 'Paid Subscribers',
+      value: metrics.paidSubscribers.toLocaleString(),
       sub: 'Paid plan users',
       icon: Crown,
       accent: 'violet',

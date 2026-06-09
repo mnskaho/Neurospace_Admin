@@ -14,7 +14,7 @@ const variantStyles: Record<BadgeVariant, string> = {
 };
 
 const labels: Record<BadgeVariant, string> = {
-  premium: 'Premium',
+  premium: 'Pro+',
   free: 'Free',
   active: 'Active',
   banned: 'Banned',
