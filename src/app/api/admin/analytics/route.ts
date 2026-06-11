@@ -43,13 +43,40 @@ function numberValue(value: unknown) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
-function parseTrainingTime(job: Row) {
-  const seconds = numberValue(job.training_time_seconds);
-  if (seconds !== null) return seconds;
+function positiveNumberValue(value: unknown) {
+  const numeric = numberValue(value);
+  return numeric !== null && numeric > 0 ? numeric : null;
+}
 
-  const formatted = String(job.training_time_formatted || '');
-  const match = formatted.match(/(\d+(?:\.\d+)?)/);
-  return match ? Number(match[1]) : null;
+function collectResultTrainingTimes(job: Row) {
+  const results = job.results || {};
+  const times = [
+    results.rnn?.training_time_seconds,
+    results.qrnn?.training_time_seconds,
+    results.qrnn?.clean?.training_time_seconds,
+    results.qrnn?.noisy?.training_time_seconds,
+    results.qrnn?.mitigated?.training_time_seconds,
+    results.training_times?.rnn?.training_time_seconds,
+    results.training_times?.qrnn?.training_time_seconds,
+    results.training_times?.qrnn_clean?.training_time_seconds,
+    results.training_times?.qrnn_noisy?.training_time_seconds,
+    results.training_times?.qrnn_mitigated?.training_time_seconds,
+  ];
+
+  return times
+    .map(positiveNumberValue)
+    .filter((value): value is number => value !== null);
+}
+
+function fallbackDurationFromDates(job: Row) {
+  if (!job.started_at || !job.completed_at) return null;
+
+  const started = new Date(job.started_at).getTime();
+  const completed = new Date(job.completed_at).getTime();
+  if (!Number.isFinite(started) || !Number.isFinite(completed)) return null;
+
+  const seconds = (completed - started) / 1000;
+  return seconds > 0 ? seconds : null;
 }
 
 function collectAccuracy(job: Row) {
@@ -124,8 +151,13 @@ export async function GET() {
     if (job.results?.rnn) addToMap(modelUsage, 'MLP');
     if (job.results?.qrnn) addToMap(modelUsage, 'QNN');
 
-    const time = parseTrainingTime(job);
-    if (time !== null) trainingTimes.push(time);
+    const resultTimes = collectResultTrainingTimes(job);
+    if (resultTimes.length > 0) {
+      trainingTimes.push(...resultTimes);
+    } else {
+      const fallbackTime = fallbackDurationFromDates(job);
+      if (fallbackTime !== null) trainingTimes.push(fallbackTime);
+    }
 
     collectAccuracy(job).forEach(({ model, accuracy }) => {
       const values = accuracyByModel.get(model) || [];
