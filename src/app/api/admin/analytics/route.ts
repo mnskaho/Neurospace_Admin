@@ -26,16 +26,6 @@ function mapToSeries(map: Map<string, number>) {
     .map(([label, value]) => ({ label, value }));
 }
 
-function datasetName(job: Row) {
-  return (
-    job.dataset_name ||
-    job.dataset_info?.dataset_name ||
-    job.filename ||
-    job.results?.dataset_name ||
-    'Unknown Dataset'
-  );
-}
-
 function statusBucket(status?: string | null) {
   const normalized = String(status || 'queued').toLowerCase();
   if (normalized.includes('complete') || normalized.includes('success')) return 'completed';
@@ -54,122 +44,16 @@ function positiveNumberValue(value: unknown) {
   return numeric !== null && numeric > 0 ? numeric : null;
 }
 
-function parseFormattedTrainingTime(value: unknown) {
-  if (typeof value !== 'string') return null;
-
-  const text = value.trim().toLowerCase();
-  if (!text) return null;
-
-  const hours = text.match(/(\d+(?:\.\d+)?)\s*h/);
-  const minutes = text.match(/(\d+(?:\.\d+)?)\s*m/);
-  const seconds = text.match(/(\d+(?:\.\d+)?)\s*s/);
-
-  if (!hours && !minutes && !seconds) {
-    return positiveNumberValue(text);
-  }
-
-  const total =
-    Number(hours?.[1] || 0) * 3600 +
-    Number(minutes?.[1] || 0) * 60 +
-    Number(seconds?.[1] || 0);
-
-  return total > 0 ? total : null;
+function average(values: number[]) {
+  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 }
 
-function firstTrainingTime(candidates: unknown[]) {
-  for (const candidate of candidates) {
-    const seconds = positiveNumberValue(candidate) ?? parseFormattedTrainingTime(candidate);
-    if (seconds !== null) return seconds;
-  }
-
-  return null;
-}
-
-function collectResultTrainingTimesByModel(job: Row) {
-  const results = job.results || {};
-  const trainingTimes = results.training_times || {};
-  const modelTimes = new Map<string, number>();
-
-  const candidatesByModel: Record<string, unknown[]> = {
-    rnn: [
-      results.rnn?.training_time_seconds,
-      results.rnn?.training_time_formatted,
-      trainingTimes.rnn?.training_time_seconds,
-      trainingTimes.rnn?.training_time_formatted,
-    ],
-    qrnn: [
-      results.qrnn?.training_time_seconds,
-      results.qrnn?.training_time_formatted,
-      trainingTimes.qrnn?.training_time_seconds,
-      trainingTimes.qrnn?.training_time_formatted,
-    ],
-    qrnn_clean: [
-      results.qrnn?.clean?.training_time_seconds,
-      results.qrnn?.clean?.training_time_formatted,
-      trainingTimes.qrnn_clean?.training_time_seconds,
-      trainingTimes.qrnn_clean?.training_time_formatted,
-    ],
-    qrnn_noisy: [
-      results.qrnn?.noisy?.training_time_seconds,
-      results.qrnn?.noisy?.training_time_formatted,
-      trainingTimes.qrnn_noisy?.training_time_seconds,
-      trainingTimes.qrnn_noisy?.training_time_formatted,
-    ],
-    qrnn_mitigated: [
-      results.qrnn?.mitigated?.training_time_seconds,
-      results.qrnn?.mitigated?.training_time_formatted,
-      trainingTimes.qrnn_mitigated?.training_time_seconds,
-      trainingTimes.qrnn_mitigated?.training_time_formatted,
-    ],
-  };
-
-  Object.entries(candidatesByModel).forEach(([model, candidates]) => {
-    const seconds = firstTrainingTime(candidates);
-    if (seconds !== null) modelTimes.set(model, seconds);
-  });
-
-  return Array.from(modelTimes.values());
-}
-
-function totalJobTrainingTime(job: Row) {
-  const resultTimes = collectResultTrainingTimesByModel(job);
-  if (resultTimes.length > 0) {
-    return resultTimes.reduce((sum, value) => sum + value, 0);
-  }
-
-  return fallbackDurationFromDates(job);
-}
-
-function fallbackDurationFromDates(job: Row) {
-  if (!job.started_at || !job.completed_at) return null;
-
-  const started = new Date(job.started_at).getTime();
-  const completed = new Date(job.completed_at).getTime();
-  if (!Number.isFinite(started) || !Number.isFinite(completed)) return null;
-
-  const seconds = (completed - started) / 1000;
-  return seconds > 0 ? seconds : null;
-}
-
-function collectAccuracy(job: Row) {
-  const pairs: { model: 'MLP' | 'QNN'; accuracy: number }[] = [];
-  const rnn = numberValue(job.results?.rnn?.accuracy);
-  if (rnn !== null) pairs.push({ model: 'MLP', accuracy: rnn <= 1 ? rnn * 100 : rnn });
-
-  const qrnn = job.results?.qrnn;
-  const qValues = [qrnn?.clean?.accuracy, qrnn?.noisy?.accuracy, qrnn?.mitigated?.accuracy, qrnn?.accuracy]
-    .map(numberValue)
-    .filter((value): value is number => value !== null);
-
-  qValues.forEach((value) => {
-    pairs.push({ model: 'QNN', accuracy: value <= 1 ? value * 100 : value });
-  });
-
-  return pairs;
+function paymentUserKey(payment: Row) {
+  return payment.user_id || payment.email || payment.id;
 }
 
 async function fetchProfiles() {
-  const profiles = await supabase.from('profiles').select('*');
+  const profiles = await supabase.from('profiles').select('id, email, created_at');
   if (!profiles.error) return profiles.data || [];
 
   const userProfiles = await supabase.from('user_profiles').select('*');
@@ -178,8 +62,35 @@ async function fetchProfiles() {
   return [];
 }
 
-function paymentUserKey(payment: Row) {
-  return payment.user_id || payment.profile_id || payment.customer_id || payment.email || payment.user_email || payment.id;
+function collectQnnAccuracies(results: Row) {
+  return [
+    results.qrnn?.accuracy,
+    results.qrnn?.clean?.accuracy,
+    results.qrnn?.noisy?.accuracy,
+    results.qrnn?.mitigated?.accuracy,
+  ]
+    .map(numberValue)
+    .filter((value): value is number => value !== null)
+    .map((value) => (value <= 1 ? value * 100 : value));
+}
+
+function collectTrainingTimes(results: Row) {
+  const times = [
+    results.rnn?.training_time_seconds,
+    results.qrnn?.training_time_seconds,
+    results.qrnn?.clean?.training_time_seconds,
+    results.qrnn?.noisy?.training_time_seconds,
+    results.qrnn?.mitigated?.training_time_seconds,
+    results.training_times?.rnn?.training_time_seconds,
+    results.training_times?.qrnn?.training_time_seconds,
+    results.training_times?.qrnn_clean?.training_time_seconds,
+    results.training_times?.qrnn_noisy?.training_time_seconds,
+    results.training_times?.qrnn_mitigated?.training_time_seconds,
+  ];
+
+  return times
+    .map(positiveNumberValue)
+    .filter((value): value is number => value !== null);
 }
 
 export async function GET() {
@@ -207,44 +118,34 @@ export async function GET() {
     ['processing', 0],
     ['queued', 0],
   ]);
-  const modelUsage = new Map<string, number>([
-    ['MLP', 0],
-    ['QNN', 0],
-  ]);
-  const datasets = new Map<string, number>();
+  const modelCounts = { mlp: 0, qnn: 0 };
+  const mlpAccuracies: number[] = [];
+  const qnnAccuracies: number[] = [];
   const trainingTimes: number[] = [];
-  const datasetTrainingTimes = new Map<string, number[]>();
-  const accuracyByModel = new Map<string, number[]>();
 
   jobs.forEach((job) => {
+    const bucket = statusBucket(job.status);
+    const results = job.results || {};
+
     addToMap(trainingsByMonth, monthKey(job.created_at));
-    addToMap(statusDistribution, statusBucket(job.status));
-    addToMap(datasets, datasetName(job));
+    addToMap(statusDistribution, bucket);
 
-    if (job.results?.rnn) addToMap(modelUsage, 'MLP');
-    if (job.results?.qrnn) addToMap(modelUsage, 'QNN');
-
-    if (statusBucket(job.status) === 'completed') {
-      const jobTrainingTime = totalJobTrainingTime(job);
-      if (jobTrainingTime !== null && jobTrainingTime > 0) {
-        trainingTimes.push(jobTrainingTime);
-
-        const name = datasetName(job);
-        const values = datasetTrainingTimes.get(name) || [];
-        values.push(jobTrainingTime);
-        datasetTrainingTimes.set(name, values);
-      }
+    if (bucket === 'completed' || results.rnn || results.qrnn) {
+      if (results.rnn) modelCounts.mlp += 1;
+      if (results.qrnn) modelCounts.qnn += 1;
     }
 
-    collectAccuracy(job).forEach(({ model, accuracy }) => {
-      const values = accuracyByModel.get(model) || [];
-      values.push(accuracy);
-      accuracyByModel.set(model, values);
-    });
+    const mlpAccuracy = numberValue(results.rnn?.accuracy);
+    if (mlpAccuracy !== null) {
+      mlpAccuracies.push(mlpAccuracy <= 1 ? mlpAccuracy * 100 : mlpAccuracy);
+    }
+
+    qnnAccuracies.push(...collectQnnAccuracies(results));
+    trainingTimes.push(...collectTrainingTimes(results));
   });
 
   payments.forEach((payment) => {
-    addToMap(revenueByMonth, monthKey(payment.created_at), Number(payment.amount || payment.price || 0));
+    addToMap(revenueByMonth, monthKey(payment.created_at), Number(payment.amount || 0));
   });
 
   const latestPaymentByUser = new Map<string, Row>();
@@ -259,21 +160,16 @@ export async function GET() {
     ['Pro+', 0],
   ]);
   latestPaymentByUser.forEach((payment) => {
-    addToMap(planDistribution, normalizePlan(payment.plan || payment.subscription_plan));
+    addToMap(planDistribution, normalizePlan(payment.plan));
   });
-  const usersWithoutPayments = Math.max(0, profiles.length - latestPaymentByUser.size);
-  addToMap(planDistribution, 'Free', usersWithoutPayments);
+  addToMap(planDistribution, 'Free', Math.max(0, profiles.length - latestPaymentByUser.size));
 
   const popularPlan =
     Array.from(planDistribution.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Free';
-
-  const revenue = payments.reduce((sum, payment) => sum + Number(payment.amount || payment.price || 0), 0);
+  const modelTotal = modelCounts.mlp + modelCounts.qnn;
+  const revenue = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
   const completedJobs = jobs.filter((job) => statusBucket(job.status) === 'completed').length;
   const failedJobs = jobs.filter((job) => statusBucket(job.status) === 'failed').length;
-  const averageTrainingTime =
-    trainingTimes.length > 0
-      ? trainingTimes.reduce((sum, value) => sum + value, 0) / trainingTimes.length
-      : 0;
 
   return NextResponse.json({
     kpis: {
@@ -288,21 +184,17 @@ export async function GET() {
     revenuePerMonth: mapToSeries(revenueByMonth),
     planDistribution: mapToSeries(planDistribution),
     jobStatusDistribution: mapToSeries(statusDistribution),
-    mostUsedModels: mapToSeries(modelUsage),
-    mostUsedDatasets: mapToSeries(datasets)
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 8),
-    averageTrainingTime,
-    averageTrainingTimeByDataset: Array.from(datasetTrainingTimes.entries())
-      .map(([dataset, values]) => ({
-        dataset,
-        averageTrainingTime: values.reduce((sum, value) => sum + value, 0) / values.length,
-        jobsCount: values.length,
-      }))
-      .sort((a, b) => b.jobsCount - a.jobsCount || a.dataset.localeCompare(b.dataset)),
-    averageAccuracyByModel: Array.from(accuracyByModel.entries()).map(([label, values]) => ({
-      label,
-      value: values.reduce((sum, value) => sum + value, 0) / values.length,
-    })),
+    modelUsage: {
+      mlp: modelCounts.mlp,
+      qnn: modelCounts.qnn,
+      total: modelTotal,
+      mlpPercent: modelTotal > 0 ? (modelCounts.mlp / modelTotal) * 100 : 0,
+      qnnPercent: modelTotal > 0 ? (modelCounts.qnn / modelTotal) * 100 : 0,
+    },
+    averageAccuracyByModel: {
+      mlp: average(mlpAccuracies),
+      qnn: average(qnnAccuracies),
+    },
+    averageTrainingTimeSeconds: average(trainingTimes),
   });
 }
