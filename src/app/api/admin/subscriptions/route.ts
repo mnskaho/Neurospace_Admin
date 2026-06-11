@@ -1,65 +1,47 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getPlanPrice, getTrainingLimit, normalizePlan } from '@/lib/utils/plan';
+import { getTrainingLimit, normalizePlan } from '@/lib/utils/plan';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-type Row = Record<string, any>;
+type Payment = {
+  id: string;
+  user_id: string | null;
+  email: string | null;
+  amount: number | null;
+  currency: string | null;
+  payment_method: string | null;
+  invoice_number: string | null;
+  created_at: string | null;
+  plan: string | null;
+};
 
-function dateValue(row: Row, fields: string[]) {
-  for (const field of fields) {
-    if (row?.[field]) return row[field] as string;
-  }
-  return null;
-}
+type Profile = {
+  id: string;
+  name: string | null;
+  institution: string | null;
+  email: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  banned: boolean | null;
+  deleted_at: string | null;
+};
 
-function normalizeStatus(payment?: Row | null): 'active' | 'pending' | 'failed' | 'canceled' {
-  const raw = String(
-    payment?.status ||
-      payment?.payment_status ||
-      payment?.subscription_status ||
-      payment?.state ||
-      ''
-  ).toLowerCase();
+type TrainingJob = {
+  id: string;
+  user_id: string | null;
+  status: string | null;
+  completed_at: string | null;
+  updated_at: string | null;
+};
 
-  if (['active', 'paid', 'completed', 'complete', 'succeeded', 'success'].includes(raw)) {
-    return 'active';
-  }
-  if (['failed', 'error', 'declined'].includes(raw)) return 'failed';
-  if (['canceled', 'cancelled', 'inactive', 'disabled'].includes(raw)) return 'canceled';
-  if (['pending', 'processing', 'created'].includes(raw)) return 'pending';
+function isCompletedThisMonth(job: TrainingJob, now = new Date()) {
+  if (String(job.status || '').toLowerCase() !== 'completed') return false;
 
-  return payment?.created_at || payment?.amount ? 'active' : 'pending';
-}
-
-function userLabel(profile: Row, payment?: Row | null) {
-  return (
-    profile?.email ||
-    profile?.name ||
-    profile?.full_name ||
-    payment?.email ||
-    payment?.user_email ||
-    payment?.user_name ||
-    'Unknown User'
-  );
-}
-
-function paymentUserKey(payment: Row) {
-  return payment.user_id || payment.profile_id || payment.customer_id || payment.email || payment.user_email;
-}
-
-function profileUserKey(profile: Row) {
-  return profile.id || profile.user_id || profile.email;
-}
-
-function isCompletedThisMonth(job: Row, now = new Date()) {
-  const status = String(job.status || '').toLowerCase();
-  if (!['completed', 'complete', 'success', 'succeeded'].includes(status)) return false;
-
-  const rawDate = dateValue(job, ['completed_at', 'updated_at', 'created_at']);
+  const rawDate = job.completed_at || job.updated_at;
   if (!rawDate) return false;
 
   const date = new Date(rawDate);
@@ -68,91 +50,90 @@ function isCompletedThisMonth(job: Row, now = new Date()) {
   return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
 }
 
-async function fetchProfiles() {
-  const profiles = await supabase.from('profiles').select('*');
-  if (!profiles.error) return profiles.data || [];
+function countTrainingsUsed(jobs: TrainingJob[], userId: string | null) {
+  if (!userId) return 0;
 
-  const userProfiles = await supabase.from('user_profiles').select('*');
-  if (!userProfiles.error) return userProfiles.data || [];
+  return jobs.filter((job) => job.user_id === userId && isCompletedThisMonth(job)).length;
+}
 
-  return [];
+function profileLabel(profile?: Profile | null) {
+  return profile?.email || profile?.name || 'Unknown User';
 }
 
 export async function GET() {
-  const [profiles, paymentsRes, jobsRes] = await Promise.all([
-    fetchProfiles(),
-    supabase.from('payments').select('*').order('created_at', { ascending: false }),
-    supabase.from('training_jobs').select('*'),
+  const [paymentsRes, profilesRes, jobsRes] = await Promise.all([
+    supabase
+      .from('payments')
+      .select('id, user_id, email, amount, currency, payment_method, invoice_number, created_at, plan')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('profiles')
+      .select('id, name, institution, email, created_at, updated_at, banned, deleted_at'),
+    supabase
+      .from('training_jobs')
+      .select('id, user_id, status, completed_at, updated_at'),
   ]);
 
   if (paymentsRes.error) {
     return NextResponse.json({ error: paymentsRes.error.message }, { status: 500 });
   }
 
+  if (profilesRes.error) {
+    return NextResponse.json({ error: profilesRes.error.message }, { status: 500 });
+  }
+
   if (jobsRes.error) {
     return NextResponse.json({ error: jobsRes.error.message }, { status: 500 });
   }
 
-  const payments = paymentsRes.data || [];
-  const jobs = jobsRes.data || [];
-  const latestPaymentByUser = new Map<string, Row>();
+  const payments = (paymentsRes.data || []) as Payment[];
+  const profiles = (profilesRes.data || []) as Profile[];
+  const jobs = (jobsRes.data || []) as TrainingJob[];
+
+  const profileById = new Map(profiles.map((profile) => [profile.id, profile]));
+  const latestPaymentByUser = new Map<string, Payment>();
 
   payments.forEach((payment) => {
-    const key = paymentUserKey(payment);
-    if (key && !latestPaymentByUser.has(String(key))) {
-      latestPaymentByUser.set(String(key), payment);
+    if (!payment.user_id) return;
+    if (!latestPaymentByUser.has(payment.user_id)) {
+      latestPaymentByUser.set(payment.user_id, payment);
     }
   });
 
-  const rowKeys = new Set<string>();
-  const sourceProfiles = profiles.length > 0 ? profiles : [];
-
-  const subscriptions = sourceProfiles.map((profile) => {
-    const key = String(profileUserKey(profile) || paymentUserKey(profile) || '');
-    rowKeys.add(key);
-    const payment = latestPaymentByUser.get(key) || null;
-    const plan = normalizePlan(payment?.plan || payment?.subscription_plan || profile?.plan);
-    const price = Number(payment?.amount ?? payment?.price ?? getPlanPrice(plan));
-    const trainingsUsed = jobs.filter(
-      (job) => String(job.user_id || job.profile_id || job.email || '') === key && isCompletedThisMonth(job)
-    ).length;
+  const subscriptions = Array.from(latestPaymentByUser.entries()).map(([userId, payment]) => {
+    const profile = profileById.get(userId);
+    const plan = normalizePlan(payment.plan || 'Free');
 
     return {
-      id: key || payment?.id || profile?.id,
-      user: userLabel(profile, payment),
+      user: payment.email || profileLabel(profile),
+      email: payment.email || profile?.email || '-',
       plan,
-      price,
+      price: Number(payment.amount || 0),
       trainingsLimit: getTrainingLimit(plan),
-      trainingsUsed,
-      status: normalizeStatus(payment),
-      paymentMethod: payment?.payment_method || payment?.provider || '-',
-      invoiceNumber: payment?.invoice_number || payment?.invoice_id || '-',
-      startDate: dateValue(payment || {}, ['start_date', 'current_period_start', 'created_at']),
-      endDate: dateValue(payment || {}, ['end_date', 'current_period_end', 'expires_at', 'subscription_end']),
-      history: payments.filter((candidate) => String(paymentUserKey(candidate) || '') === key),
+      trainingsUsed: countTrainingsUsed(jobs, userId),
+      status: 'active',
+      paymentMethod: payment.payment_method || '-',
+      invoiceNumber: payment.invoice_number || '-',
+      startDate: payment.created_at,
+      endDate: null,
     };
   });
 
-  payments.forEach((payment) => {
-    const key = String(paymentUserKey(payment) || payment.id);
-    if (rowKeys.has(key)) return;
+  profiles.forEach((profile) => {
+    if (latestPaymentByUser.has(profile.id)) return;
 
-    const plan = normalizePlan(payment.plan || payment.subscription_plan);
     subscriptions.push({
-      id: key,
-      user: userLabel({}, payment),
-      plan,
-      price: Number(payment.amount ?? payment.price ?? getPlanPrice(plan)),
-      trainingsLimit: getTrainingLimit(plan),
-      trainingsUsed: jobs.filter(
-        (job) => String(job.user_id || job.profile_id || job.email || '') === key && isCompletedThisMonth(job)
-      ).length,
-      status: normalizeStatus(payment),
-      paymentMethod: payment.payment_method || payment.provider || '-',
-      invoiceNumber: payment.invoice_number || payment.invoice_id || '-',
-      startDate: dateValue(payment, ['start_date', 'current_period_start', 'created_at']),
-      endDate: dateValue(payment, ['end_date', 'current_period_end', 'expires_at', 'subscription_end']),
-      history: payments.filter((candidate) => String(paymentUserKey(candidate) || '') === key),
+      user: profileLabel(profile),
+      email: profile.email || '-',
+      plan: 'Free',
+      price: 0,
+      trainingsLimit: 1,
+      trainingsUsed: countTrainingsUsed(jobs, profile.id),
+      status: 'active',
+      paymentMethod: '-',
+      invoiceNumber: '-',
+      startDate: profile.created_at,
+      endDate: null,
     });
   });
 

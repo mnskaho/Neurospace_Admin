@@ -8,36 +8,45 @@ import AppLayout from '@/components/AppLayout';
 import { TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
 
 type SubscriptionRow = {
-  id: string;
-  user: string;
-  plan: 'Free' | 'Pro' | 'Pro+';
-  price: number;
-  trainingsLimit: number;
-  trainingsUsed: number;
-  status: 'active' | 'pending' | 'failed' | 'canceled';
-  paymentMethod: string;
-  invoiceNumber: string;
-  startDate: string | null;
-  endDate: string | null;
-  history: Record<string, any>[];
+  user?: string | null;
+  email?: string | null;
+  plan?: 'Free' | 'Pro' | 'Pro+' | string | null;
+  price?: number | null;
+  trainingsLimit?: number | null;
+  trainingsUsed?: number | null;
+  status?: 'active' | 'pending' | 'failed' | 'canceled' | string | null;
+  paymentMethod?: string | null;
+  invoiceNumber?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
 };
 
-const statusStyles: Record<SubscriptionRow['status'], string> = {
+const statusStyles: Record<string, string> = {
   active: 'bg-[hsl(142_71%_45%/0.12)] text-[hsl(142_71%_55%)] border-[hsl(142_71%_45%/0.3)]',
   pending: 'bg-[hsl(38_92%_50%/0.12)] text-[hsl(38_92%_65%)] border-[hsl(38_92%_50%/0.3)]',
   failed: 'bg-[hsl(0_72%_51%/0.12)] text-[hsl(0_72%_65%)] border-[hsl(0_72%_51%/0.3)]',
   canceled: 'bg-[hsl(240_4%_16%)] text-[hsl(var(--muted-foreground))] border-[hsl(var(--border))]',
 };
 
-function formatDate(value: string | null) {
+function display(value: unknown) {
+  if (value === null || value === undefined || value === '') return '-';
+  return String(value);
+}
+
+function formatDate(value?: string | null) {
   if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleDateString();
 }
 
-function formatPrice(value: number) {
+function formatPrice(value?: number | null) {
   return `${Number(value || 0).toLocaleString()}\u20ac`;
+}
+
+function normalizedStatus(status?: string | null) {
+  const value = status || 'pending';
+  return ['active', 'pending', 'failed', 'canceled'].includes(value) ? value : 'pending';
 }
 
 export default function SubscriptionsPage() {
@@ -71,7 +80,7 @@ export default function SubscriptionsPage() {
     if (!q) return rows;
 
     return rows.filter((row) =>
-      [row.user, row.plan, row.status, row.paymentMethod, row.invoiceNumber]
+      [row.user, row.email, row.plan, row.status, row.paymentMethod, row.invoiceNumber]
         .join(' ')
         .toLowerCase()
         .includes(q)
@@ -141,26 +150,32 @@ export default function SubscriptionsPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((row) => (
-                  <tr key={row.id} className="border-t border-neutral-800 hover:bg-neutral-900/40 transition">
-                    <td className="p-3 font-medium">{row.user}</td>
+                filtered.map((row, index) => {
+                  const status = normalizedStatus(row.status);
+
+                  return (
+                  <tr key={`${row.email || row.user || 'subscription'}-${index}`} className="border-t border-neutral-800 hover:bg-neutral-900/40 transition">
+                    <td className="p-3 font-medium">
+                      {display(row.user)}
+                      <div className="text-xs text-gray-500">{display(row.email)}</div>
+                    </td>
                     <td className="p-3">
                       <span className="px-2 py-1 text-xs bg-neutral-800 rounded border border-neutral-700">
-                        {row.plan}
+                        {display(row.plan)}
                       </span>
                     </td>
                     <td className="p-3 tabular-nums">{formatPrice(row.price)}</td>
-                    <td className="p-3 tabular-nums">{row.trainingsLimit}</td>
+                    <td className="p-3 tabular-nums">{display(row.trainingsLimit)}</td>
                     <td className="p-3 tabular-nums">
-                      {row.trainingsUsed} / {row.trainingsLimit}
+                      {display(row.trainingsUsed)} / {display(row.trainingsLimit)}
                     </td>
                     <td className="p-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-md border text-[11px] font-semibold capitalize ${statusStyles[row.status]}`}>
-                        {row.status}
+                      <span className={`inline-flex px-2 py-0.5 rounded-md border text-[11px] font-semibold capitalize ${statusStyles[status]}`}>
+                        {status}
                       </span>
                     </td>
-                    <td className="p-3 text-gray-400">{row.paymentMethod}</td>
-                    <td className="p-3 text-gray-400">{row.invoiceNumber}</td>
+                    <td className="p-3 text-gray-400">{display(row.paymentMethod)}</td>
+                    <td className="p-3 text-gray-400">{display(row.invoiceNumber)}</td>
                     <td className="p-3 text-gray-400 whitespace-nowrap">{formatDate(row.startDate)}</td>
                     <td className="p-3 text-gray-400 whitespace-nowrap">{formatDate(row.endDate)}</td>
                     <td className="p-3">
@@ -181,7 +196,7 @@ export default function SubscriptionsPage() {
                         </button>
                         <button
                           className="p-1.5 rounded-md text-gray-500 hover:text-white hover:bg-neutral-800 transition"
-                          title={row.status === 'canceled' ? 'Reactivate subscription' : 'Disable subscription'}
+                          title={status === 'canceled' ? 'Reactivate subscription' : 'Disable subscription'}
                           type="button"
                         >
                           <Power size={15} />
@@ -189,7 +204,8 @@ export default function SubscriptionsPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -201,7 +217,7 @@ export default function SubscriptionsPage() {
               <div className="flex items-start justify-between gap-4 mb-4">
                 <div>
                   <h2 className="text-lg font-semibold">Payment History</h2>
-                  <p className="text-sm text-gray-400">{selected.user}</p>
+                  <p className="text-sm text-gray-400">{display(selected.user)}</p>
                 </div>
                 <button
                   onClick={() => setSelected(null)}
@@ -211,7 +227,7 @@ export default function SubscriptionsPage() {
                 </button>
               </div>
               <pre className="max-h-[60vh] overflow-auto rounded-lg bg-black/40 border border-neutral-800 p-4 text-xs text-gray-300">
-                {JSON.stringify(selected.history, null, 2)}
+                {JSON.stringify(selected, null, 2)}
               </pre>
             </div>
           </div>
