@@ -32,21 +32,21 @@ const navGroups = [
     items: [
       { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
       { label: 'Users', href: '/user-management', icon: Users },
-      // { label: 'Subscriptions', href: '/subscriptions', icon: CreditCard },
+      { label: 'Subscriptions', href: '/subscriptions', icon: CreditCard },
 
     ],
   },
-  // {
-  //   label: 'AI / ML',
-  //   items: [
-  //     { label: 'Datasets', href: '/datasets', icon: Database },
-  //     { label: 'Models', href: '/models', icon: BrainCircuit },
-  //   ],
-  // },
+  {
+    label: 'AI / ML',
+    items: [
+      { label: 'Datasets', href: '/datasets', icon: Database },
+      { label: 'Models', href: '/models', icon: BrainCircuit },
+    ],
+  },
   {
     label: 'Insights',
     items: [
-      // { label: 'Analytics', href: '/analytics', icon: BarChart3 },
+      { label: 'Analytics', href: '/analytics', icon: BarChart3 },
       { label: 'Settings', href: '/settings', icon: Settings },
     ],
   },
