@@ -27,7 +27,13 @@ function mapToSeries(map: Map<string, number>) {
 }
 
 function datasetName(job: Row) {
-  return job.dataset_name || job.dataset_info?.dataset_name || job.filename || 'Unknown Dataset';
+  return (
+    job.dataset_name ||
+    job.dataset_info?.dataset_name ||
+    job.filename ||
+    job.results?.dataset_name ||
+    'Unknown Dataset'
+  );
 }
 
 function statusBucket(status?: string | null) {
@@ -48,24 +54,90 @@ function positiveNumberValue(value: unknown) {
   return numeric !== null && numeric > 0 ? numeric : null;
 }
 
-function collectResultTrainingTimes(job: Row) {
-  const results = job.results || {};
-  const times = [
-    results.rnn?.training_time_seconds,
-    results.qrnn?.training_time_seconds,
-    results.qrnn?.clean?.training_time_seconds,
-    results.qrnn?.noisy?.training_time_seconds,
-    results.qrnn?.mitigated?.training_time_seconds,
-    results.training_times?.rnn?.training_time_seconds,
-    results.training_times?.qrnn?.training_time_seconds,
-    results.training_times?.qrnn_clean?.training_time_seconds,
-    results.training_times?.qrnn_noisy?.training_time_seconds,
-    results.training_times?.qrnn_mitigated?.training_time_seconds,
-  ];
+function parseFormattedTrainingTime(value: unknown) {
+  if (typeof value !== 'string') return null;
 
-  return times
-    .map(positiveNumberValue)
-    .filter((value): value is number => value !== null);
+  const text = value.trim().toLowerCase();
+  if (!text) return null;
+
+  const hours = text.match(/(\d+(?:\.\d+)?)\s*h/);
+  const minutes = text.match(/(\d+(?:\.\d+)?)\s*m/);
+  const seconds = text.match(/(\d+(?:\.\d+)?)\s*s/);
+
+  if (!hours && !minutes && !seconds) {
+    return positiveNumberValue(text);
+  }
+
+  const total =
+    Number(hours?.[1] || 0) * 3600 +
+    Number(minutes?.[1] || 0) * 60 +
+    Number(seconds?.[1] || 0);
+
+  return total > 0 ? total : null;
+}
+
+function firstTrainingTime(candidates: unknown[]) {
+  for (const candidate of candidates) {
+    const seconds = positiveNumberValue(candidate) ?? parseFormattedTrainingTime(candidate);
+    if (seconds !== null) return seconds;
+  }
+
+  return null;
+}
+
+function collectResultTrainingTimesByModel(job: Row) {
+  const results = job.results || {};
+  const trainingTimes = results.training_times || {};
+  const modelTimes = new Map<string, number>();
+
+  const candidatesByModel: Record<string, unknown[]> = {
+    rnn: [
+      results.rnn?.training_time_seconds,
+      results.rnn?.training_time_formatted,
+      trainingTimes.rnn?.training_time_seconds,
+      trainingTimes.rnn?.training_time_formatted,
+    ],
+    qrnn: [
+      results.qrnn?.training_time_seconds,
+      results.qrnn?.training_time_formatted,
+      trainingTimes.qrnn?.training_time_seconds,
+      trainingTimes.qrnn?.training_time_formatted,
+    ],
+    qrnn_clean: [
+      results.qrnn?.clean?.training_time_seconds,
+      results.qrnn?.clean?.training_time_formatted,
+      trainingTimes.qrnn_clean?.training_time_seconds,
+      trainingTimes.qrnn_clean?.training_time_formatted,
+    ],
+    qrnn_noisy: [
+      results.qrnn?.noisy?.training_time_seconds,
+      results.qrnn?.noisy?.training_time_formatted,
+      trainingTimes.qrnn_noisy?.training_time_seconds,
+      trainingTimes.qrnn_noisy?.training_time_formatted,
+    ],
+    qrnn_mitigated: [
+      results.qrnn?.mitigated?.training_time_seconds,
+      results.qrnn?.mitigated?.training_time_formatted,
+      trainingTimes.qrnn_mitigated?.training_time_seconds,
+      trainingTimes.qrnn_mitigated?.training_time_formatted,
+    ],
+  };
+
+  Object.entries(candidatesByModel).forEach(([model, candidates]) => {
+    const seconds = firstTrainingTime(candidates);
+    if (seconds !== null) modelTimes.set(model, seconds);
+  });
+
+  return Array.from(modelTimes.values());
+}
+
+function totalJobTrainingTime(job: Row) {
+  const resultTimes = collectResultTrainingTimesByModel(job);
+  if (resultTimes.length > 0) {
+    return resultTimes.reduce((sum, value) => sum + value, 0);
+  }
+
+  return fallbackDurationFromDates(job);
 }
 
 function fallbackDurationFromDates(job: Row) {
@@ -141,6 +213,7 @@ export async function GET() {
   ]);
   const datasets = new Map<string, number>();
   const trainingTimes: number[] = [];
+  const datasetTrainingTimes = new Map<string, number[]>();
   const accuracyByModel = new Map<string, number[]>();
 
   jobs.forEach((job) => {
@@ -151,12 +224,16 @@ export async function GET() {
     if (job.results?.rnn) addToMap(modelUsage, 'MLP');
     if (job.results?.qrnn) addToMap(modelUsage, 'QNN');
 
-    const resultTimes = collectResultTrainingTimes(job);
-    if (resultTimes.length > 0) {
-      trainingTimes.push(...resultTimes);
-    } else {
-      const fallbackTime = fallbackDurationFromDates(job);
-      if (fallbackTime !== null) trainingTimes.push(fallbackTime);
+    if (statusBucket(job.status) === 'completed') {
+      const jobTrainingTime = totalJobTrainingTime(job);
+      if (jobTrainingTime !== null && jobTrainingTime > 0) {
+        trainingTimes.push(jobTrainingTime);
+
+        const name = datasetName(job);
+        const values = datasetTrainingTimes.get(name) || [];
+        values.push(jobTrainingTime);
+        datasetTrainingTimes.set(name, values);
+      }
     }
 
     collectAccuracy(job).forEach(({ model, accuracy }) => {
@@ -216,6 +293,13 @@ export async function GET() {
       .sort((a, b) => b.value - a.value)
       .slice(0, 8),
     averageTrainingTime,
+    averageTrainingTimeByDataset: Array.from(datasetTrainingTimes.entries())
+      .map(([dataset, values]) => ({
+        dataset,
+        averageTrainingTime: values.reduce((sum, value) => sum + value, 0) / values.length,
+        jobsCount: values.length,
+      }))
+      .sort((a, b) => b.jobsCount - a.jobsCount || a.dataset.localeCompare(b.dataset)),
     averageAccuracyByModel: Array.from(accuracyByModel.entries()).map(([label, values]) => ({
       label,
       value: values.reduce((sum, value) => sum + value, 0) / values.length,

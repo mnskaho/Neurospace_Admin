@@ -8,6 +8,7 @@ import AppLayout from '@/components/AppLayout';
 import StatusBadge from '@/components/ui/StatusBadge';
 import { TableRowSkeleton } from '@/components/ui/LoadingSkeleton';
 import type { ModelRow } from '@/lib/admin-training-jobs';
+import { formatTrainingTime } from '@/lib/utils/time';
 
 type StatusVariant = 'running' | 'completed' | 'failed' | 'queued';
 
@@ -28,6 +29,18 @@ function formatDate(value: string | null) {
 
 function fileHref(path: string) {
   return `/api/admin/storage-file?path=${encodeURIComponent(path)}`;
+}
+
+function formatModelTrainingTime(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === '-') return '-';
+
+  const numeric = Number(trimmed.replace(/s$/i, ''));
+  if (Number.isFinite(numeric)) {
+    return formatTrainingTime(numeric);
+  }
+
+  return value;
 }
 
 export default function ModelsPage() {
@@ -144,7 +157,7 @@ export default function ModelsPage() {
                     <td className="p-3 tabular-nums">{row.precision}</td>
                     <td className="p-3 tabular-nums">{row.recall}</td>
                     <td className="p-3 tabular-nums">{row.f1Score}</td>
-                    <td className="p-3 whitespace-nowrap">{row.trainingTime}</td>
+                    <td className="p-3 whitespace-nowrap">{formatModelTrainingTime(row.trainingTime)}</td>
                     <td className="p-3">
                       <StatusBadge variant={statusVariant(row.status)} />
                     </td>

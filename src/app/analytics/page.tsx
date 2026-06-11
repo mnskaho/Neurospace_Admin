@@ -29,6 +29,11 @@ type AnalyticsPayload = {
   mostUsedModels: SeriesItem[];
   mostUsedDatasets: SeriesItem[];
   averageTrainingTime: number;
+  averageTrainingTimeByDataset: {
+    dataset: string;
+    averageTrainingTime: number;
+    jobsCount: number;
+  }[];
   averageAccuracyByModel: SeriesItem[];
 };
 
@@ -72,6 +77,41 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
     <div className="bg-neutral-950 border border-neutral-800 rounded-xl p-5">
       <h2 className="text-sm font-semibold mb-4">{title}</h2>
       {children}
+    </div>
+  );
+}
+
+function DatasetTrainingTimeTable({
+  rows,
+}: {
+  rows: AnalyticsPayload['averageTrainingTimeByDataset'];
+}) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-gray-400">No completed jobs with training time data.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-left text-gray-400">
+          <tr className="border-b border-neutral-800">
+            <th className="pb-2 pr-3 font-medium">Dataset</th>
+            <th className="pb-2 px-3 font-medium">Average Training Time</th>
+            <th className="pb-2 pl-3 font-medium text-right">Jobs Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.dataset} className="border-b border-neutral-900 last:border-0">
+              <td className="py-3 pr-3 text-gray-200 max-w-[260px] truncate">{row.dataset}</td>
+              <td className="py-3 px-3 text-gray-300 tabular-nums">
+                {formatTrainingTime(row.averageTrainingTime)}
+              </td>
+              <td className="py-3 pl-3 text-right text-gray-400 tabular-nums">{row.jobsCount}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -200,6 +240,11 @@ export default function AnalyticsPage() {
             <ChartCard title="Average accuracy by model">
               <BarList items={analytics.averageAccuracyByModel} suffix="%" />
             </ChartCard>
+            <div className="lg:col-span-2">
+              <ChartCard title="Average training time by dataset">
+                <DatasetTrainingTimeTable rows={analytics.averageTrainingTimeByDataset || []} />
+              </ChartCard>
+            </div>
           </div>
         )}
       </div>
