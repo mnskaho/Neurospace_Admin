@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import AppLayout from '@/components/AppLayout';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
+import { formatTrainingTime } from '@/lib/utils/time';
 
 type SeriesItem = {
   label: string;
@@ -37,15 +38,6 @@ function formatCurrency(value: number) {
 
 function formatNumber(value: number) {
   return Number(value || 0).toLocaleString();
-}
-
-function formatDuration(seconds: number) {
-  const value = Number(seconds || 0);
-  if (value < 60) return `${value.toFixed(1)}s`;
-
-  const minutes = Math.floor(value / 60);
-  const remainingSeconds = value - minutes * 60;
-  return `${minutes}m ${remainingSeconds.toFixed(1)}s`;
 }
 
 function BarList({ items, suffix = '' }: { items: SeriesItem[]; suffix?: string }) {
@@ -201,7 +193,7 @@ export default function AnalyticsPage() {
               <div className="flex items-center gap-3">
                 <Activity size={26} className="text-[hsl(var(--primary))]" />
                 <p className="text-3xl font-semibold tabular-nums">
-                  {formatDuration(analytics.averageTrainingTime)}
+                  {formatTrainingTime(analytics.averageTrainingTime)}
                 </p>
               </div>
             </ChartCard>
