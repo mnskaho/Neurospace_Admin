@@ -1,3 +1,5 @@
+import { formatTrainingTime } from '@/lib/utils/time';
+
 export type JsonRecord = Record<string, any>;
 
 export type TrainingJob = {
@@ -102,11 +104,74 @@ function getBackend(job: TrainingJob): string {
   );
 }
 
-function getTrainingTime(job: TrainingJob): string {
-  if (job.training_time_formatted) return job.training_time_formatted;
-  if (job.training_time_seconds !== null && job.training_time_seconds !== undefined) {
-    return `${job.training_time_seconds}s`;
+function getPath(source: JsonRecord | null | undefined, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, key) => {
+    if (!current || typeof current !== 'object') return undefined;
+    return (current as JsonRecord)[key];
+  }, source);
+}
+
+function firstFormattedValue(results: JsonRecord | null | undefined, paths: string[]): string | null {
+  for (const path of paths) {
+    const value = getPath(results, path);
+    if (typeof value === 'string' && value.trim()) return value.trim();
   }
+
+  return null;
+}
+
+function firstPositiveSeconds(results: JsonRecord | null | undefined, paths: string[]): number | null {
+  for (const path of paths) {
+    const numeric = Number(getPath(results, path));
+    if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  }
+
+  return null;
+}
+
+export function extractModelTrainingTime(
+  results: JsonRecord | null | undefined,
+  modelType: string,
+  variant?: string
+): string {
+  const normalizedModel = modelType.toLowerCase();
+  const normalizedVariant = variant?.toLowerCase();
+  let formattedPaths: string[] = [];
+  let secondsPaths: string[] = [];
+
+  if (normalizedModel === 'mlp' || normalizedModel === 'rnn') {
+    formattedPaths = [
+      'rnn.training_time_formatted',
+      'training_times.rnn.training_time_formatted',
+      'comparison.rnn_training_time_formatted',
+    ];
+    secondsPaths = [
+      'rnn.training_time_seconds',
+      'training_times.rnn.training_time_seconds',
+      'comparison.rnn_training_time_seconds',
+    ];
+  } else if (normalizedModel === 'qnn' || normalizedModel === 'qrnn') {
+    const variantKey = normalizedVariant ? `qrnn_${normalizedVariant}` : 'qrnn';
+    const nestedPrefix = normalizedVariant ? `qrnn.${normalizedVariant}` : 'qrnn';
+
+    formattedPaths = [
+      `${nestedPrefix}.training_time_formatted`,
+      `training_times.${variantKey}.training_time_formatted`,
+      `comparison.${variantKey}_training_time_formatted`,
+    ];
+    secondsPaths = [
+      `${nestedPrefix}.training_time_seconds`,
+      `training_times.${variantKey}.training_time_seconds`,
+      `comparison.${variantKey}_training_time_seconds`,
+    ];
+  }
+
+  const formatted = firstFormattedValue(results, formattedPaths);
+  if (formatted) return formatted;
+
+  const seconds = firstPositiveSeconds(results, secondsPaths);
+  if (seconds !== null) return formatTrainingTime(seconds);
+
   return '-';
 }
 
@@ -156,7 +221,7 @@ export function mapModelRows(job: TrainingJob): ModelRow[] {
   const results = job.results || {};
   const qrnn = results.qrnn;
 
-  const pushRow = (model: string, metrics?: JsonRecord | null) => {
+  const pushRow = (model: string, metrics?: JsonRecord | null, modelType = model, variant?: string) => {
     rows.push({
       id: `${job.id}-${model.toLowerCase().replace(/\s+/g, '-')}`,
       jobId: job.id,
@@ -165,7 +230,7 @@ export function mapModelRows(job: TrainingJob): ModelRow[] {
       dataset: getDatasetName(job),
       user: getUserLabel(job),
       ...modelMetrics(metrics),
-      trainingTime: getTrainingTime(job),
+      trainingTime: extractModelTrainingTime(results, modelType, variant),
       status: job.status || 'queued',
       createdAt: job.completed_at || job.created_at || null,
       pdfPath: job.pdf_path || null,
@@ -174,15 +239,15 @@ export function mapModelRows(job: TrainingJob): ModelRow[] {
   };
 
   if (results.rnn) {
-    pushRow('MLP', results.rnn);
+    pushRow('MLP', results.rnn, 'MLP');
   }
 
   if (qrnn?.clean || qrnn?.noisy || qrnn?.mitigated) {
-    if (qrnn.clean) pushRow('QNN Clean', qrnn.clean);
-    if (qrnn.noisy) pushRow('QNN Noisy', qrnn.noisy);
-    if (qrnn.mitigated) pushRow('QNN Mitigated', qrnn.mitigated);
+    if (qrnn.clean) pushRow('QNN Clean', qrnn.clean, 'QNN', 'clean');
+    if (qrnn.noisy) pushRow('QNN Noisy', qrnn.noisy, 'QNN', 'noisy');
+    if (qrnn.mitigated) pushRow('QNN Mitigated', qrnn.mitigated, 'QNN', 'mitigated');
   } else if (qrnn) {
-    pushRow('QNN', qrnn);
+    pushRow('QNN', qrnn, 'QNN');
   }
 
   if (rows.length === 0) {
